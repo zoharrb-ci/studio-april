@@ -11,20 +11,69 @@
         @media print { .no-print { display: none; } @page { size: landscape; margin: 1cm; } }
         .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; background-color: #e2e8f0; border-radius: 8px; overflow: hidden; }
         .day-cell { background-color: white; min-height: 140px; padding: 8px; display: flex; flex-direction: column; border: 1px solid #f0f4f8; }
+        
+        /* --- ימי שבוע צפים --- */
+        .calendar-grid-header {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 4px;
+            background-color: #e2e8f0;
+            border-radius: 8px 8px 0 0;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
         .header-cell { background-color: #f0f4f8; font-weight: bold; text-align: center; padding: 10px; color: #5a6a8a; }
+        
+        /* התאמת גריד הלוח עצמו (ללא הכותרות) */
+        .calendar-grid-body { 
+            display: grid; 
+            grid-template-columns: repeat(7, 1fr); 
+            gap: 4px; 
+            background-color: #e2e8f0; 
+            border-radius: 0 0 8px 8px; 
+            overflow: hidden; 
+        }
+
         .date-num { font-weight: 700; font-size: 1.1rem; margin-bottom: 4px; }
         .yoga-class { font-size: 0.75rem; line-height: 1.3; padding: 6px; border-radius: 4px; margin-bottom: 4px; background-color: #e6f7f2; border-right: 4px solid #b2d8d0; }
         .holiday { font-size: 0.75rem; font-weight: bold; color: #d68a8a; background-color: #fff1f1; padding: 2px 6px; border-radius: 4px; margin-bottom: 6px; }
         .other-month { background-color: #f9f9f9; opacity: 0.5; }
         
+        /* --- אנימציית טעינה --- */
+        .loading-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(255, 255, 255, 0.8);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 50;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s;
+        }
+        .loading-overlay.active {
+            opacity: 1;
+            pointer-events: all;
+        }
+        .spinner {
+            border: 4px solid rgba(0, 0, 0, 0.1);
+            width: 40px; height: 40px;
+            border-radius: 50%;
+            border-left-color: #10b981; /* צבע אמרלד */
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
         /* --- התאמות מיוחדות לתצוגה בטלפון נייד --- */
         .day-header { margin-bottom: 4px; }
         .day-name-mobile { display: none; }
         
         @media (max-width: 768px) {
             body { padding: 10px; }
-            .calendar-grid { display: flex; flex-direction: column; background: transparent; border: none; gap: 8px; }
-            .header-cell { display: none; }
+            .calendar-grid-header { display: none; } /* הסתרת הכותרות הצפות בנייד */
+            .calendar-grid-body { display: flex; flex-direction: column; background: transparent; border: none; gap: 8px; border-radius: 0; }
             .day-cell { min-height: auto; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
             .other-month { display: none !important; }
             .day-header { display: flex; align-items: baseline; margin-bottom: 12px; border-bottom: 1px solid #f0f4f8; padding-bottom: 6px; }
@@ -37,14 +86,27 @@
 </head>
 <body>
 
-    <div class="max-w-7xl mx-auto bg-white p-4 md:p-6 rounded-xl shadow-lg">
+    <!-- שכבת אנימציית טעינה -->
+    <div id="loading" class="loading-overlay">
+        <div class="flex flex-col items-center">
+            <div class="spinner mb-2"></div>
+            <div class="text-emerald-700 font-bold">מעדכן נתונים מהענן...</div>
+        </div>
+    </div>
+
+    <div class="max-w-7xl mx-auto bg-white p-4 md:p-6 rounded-xl shadow-lg relative">
         <header class="text-center mb-6">
             <h1 class="text-3xl font-bold text-gray-700">שיעורי יוגה בסטודיו קשובה לחודש אפריל 2026</h1>
-            <div id="status" class="text-sm text-emerald-600 font-medium mt-2">טוען נתונים...</div>
+            <div id="status" class="text-sm text-emerald-600 font-medium mt-2">מוכן</div>
         </header>
 
-        <div class="calendar-grid" id="calendar">
+        <!-- ימי השבוע הצפים -->
+        <div class="calendar-grid-header no-print">
             <div class="header-cell">ראשון</div><div class="header-cell">שני</div><div class="header-cell">שלישי</div><div class="header-cell">רביעי</div><div class="header-cell">חמישי</div><div class="header-cell">שישי</div><div class="header-cell">שבת</div>
+        </div>
+
+        <!-- גוף לוח השנה -->
+        <div class="calendar-grid-body" id="calendar">
         </div>
 
         <footer class="mt-8 pt-4 border-t flex justify-between items-center no-print">
@@ -57,31 +119,23 @@
         const CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRMvoPaqs1EIxHWPhXGEEOZwjphNZGLhOdc0KusQlASx_9kr2vtILF9jDMBvo_mEhqWJZD1_LPa_zWj/pub?gid=0&single=true&output=csv';
         
         const holidays = { 
-            "1": "ערב פסח", 
-            "2": "פסח", 
-            "3": "א' דחוה\"מ פסח", 
-            "4": "ב' דחוה\"מ פסח", 
-            "5": "ג' דחוה\"מ פסח", 
-            "6": "ד' דחוה\"מ פסח", 
-            "7": "ה' דחוה\"מ פסח", 
-            "8": "שביעי של פסח", 
-            "9": "אסרו חג", 
-            "14": "🕯️ יום הזיכרון לשואה ולגבורה", 
-            "21": "🕯️ יום הזיכרון", 
-            "22": "🇮🇱 יום העצמאות" 
+            "1": "ערב פסח", "2": "פסח", "3": "א' דחוה\"מ פסח", "4": "ב' דחוה\"מ פסח", 
+            "5": "ג' דחוה\"מ פסח", "6": "ד' דחוה\"מ פסח", "7": "ה' דחוה\"מ פסח", 
+            "8": "שביעי של פסח", "9": "אסרו חג", 
+            "14": "🕯️ יום הזיכרון לשואה ולגבורה", "21": "🕯️ יום הזיכרון", "22": "🇮🇱 יום העצמאות" 
         };
 
         function initCalendar() {
             const grid = document.getElementById('calendar');
-            const headers = Array.from(grid.querySelectorAll('.header-cell'));
-            grid.innerHTML = ''; headers.forEach(h => grid.appendChild(h));
+            grid.innerHTML = ''; 
+            
             for (let i = 0; i < 3; i++) grid.appendChild(Object.assign(document.createElement('div'), {className: 'day-cell other-month'}));
             
             const daysNames = ["ראשון", "שני", "שלישי", "רביעי", "חמישי", "שישי", "שבת"];
             
             for (let d = 1; d <= 30; d++) {
                 const cell = Object.assign(document.createElement('div'), {className: 'day-cell', id: `day-${d}`});
-                const dayOfWeek = daysNames[(d + 2) % 7]; // ה-1 באפריל מתחיל ביום רביעי (אינדקס 3)
+                const dayOfWeek = daysNames[(d + 2) % 7]; 
                 
                 cell.innerHTML = `
                     <div class="day-header">
@@ -100,39 +154,116 @@
         }
 
         async function fetchClasses() {
+            const loader = document.getElementById('loading');
+            loader.classList.add('active');
+            document.getElementById('status').textContent = 'טוען נתונים...';
+
             try {
+                // המטמון מנוקה בכל קריאה כדי לקבל את המידע העדכני ביותר
                 const res = await fetch(CSV_URL + '&cachebust=' + Date.now());
                 const text = await res.text();
                 parseData(text);
                 document.getElementById('status').textContent = 'מחובר ומעודכן ✅';
             } catch (e) {
                 document.getElementById('status').textContent = 'שגיאת חיבור ❌';
+            } finally {
+                loader.classList.remove('active');
             }
         }
 
+        // פונקציה חכמה לפענוח CSV (מתמודדת עם פסיקים ושורות רווח בתוך התאים)
+        function parseCSV(str) {
+            const rows = [];
+            let currentRow = [];
+            let currentCell = '';
+            let inQuotes = false;
+
+            for (let i = 0; i < str.length; i++) {
+                const char = str[i];
+                const nextChar = str[i + 1];
+
+                if (char === '"' && inQuotes && nextChar === '"') {
+                    currentCell += '"'; i++; 
+                } else if (char === '"') {
+                    inQuotes = !inQuotes;
+                } else if (char === ',' && !inQuotes) {
+                    currentRow.push(currentCell.trim());
+                    currentCell = '';
+                } else if ((char === '\n' || char === '\r') && !inQuotes) {
+                    if (char === '\r' && nextChar === '\n') i++;
+                    currentRow.push(currentCell.trim());
+                    rows.push(currentRow);
+                    currentRow = [];
+                    currentCell = '';
+                } else {
+                    currentCell += char;
+                }
+            }
+            if (currentCell || currentRow.length > 0) {
+                currentRow.push(currentCell.trim());
+                rows.push(currentRow);
+            }
+            return rows.filter(row => row.join('').trim() !== '');
+        }
+
         function parseData(csv) {
+            // מנקה את השיעורים הישנים מהלוח
             document.querySelectorAll('.yoga-class').forEach(e => e.remove());
-            const lines = csv.replace(/\r/g, '').split('\n');
-            const headers = lines[0].split(',').map(h => h.replace(/"/g, '').trim());
             
-            // מציאת אינדקסים לפי שם עמודה - הופך את הקוד לאמין בהרבה!
+            const rows = parseCSV(csv);
+            if (rows.length < 2) return; // הגיליון ריק או מכיל רק כותרות
+
+            const headers = rows[0];
+            
+            // חיפוש חכם של עמודות הגיליון (גם אם הן זזו מעט)
             const idx = {
-                type: headers.indexOf('סוג שיעור'),
-                teacher: headers.indexOf('מורה'),
-                time: headers.indexOf('זמן'),
-                date: headers.indexOf('תאריך')
+                type: headers.findIndex(h => h.includes('סוג')),
+                teacher: headers.findIndex(h => h.includes('מורה')),
+                time: headers.findIndex(h => h.includes('זמן') || h.includes('שעה')),
+                date: headers.findIndex(h => h.includes('תאריך'))
             };
 
-            lines.slice(1).forEach(line => {
-                const cols = line.split(',').map(c => c.replace(/"/g, '').trim());
-                if (cols[idx.date] && cols[idx.date].includes('/04/2026')) {
-                    const day = parseInt(cols[idx.date].split('/')[0]);
-                    const cell = document.getElementById(`day-${day}`);
-                    if (cell) {
-                        const div = document.createElement('div');
-                        div.className = 'yoga-class';
-                        div.innerHTML = `<strong>${cols[idx.time]}</strong><br>${cols[idx.type]} ${cols[idx.teacher] ? '<br><i>'+cols[idx.teacher]+'</i>' : ''}`;
-                        cell.appendChild(div);
+            if (idx.date === -1) {
+                document.getElementById('status').textContent = 'שגיאה: עמודת "תאריך" לא נמצאה בגיליון';
+                return;
+            }
+
+            rows.slice(1).forEach(cols => {
+                const rawDate = cols[idx.date] || '';
+                
+                // רגולר אקספרשן ששולף את חלקי התאריך - לא משנה אם זה פורמט ארה"ב או ישראל
+                const match = rawDate.match(/(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4}|\d{2})/);
+                
+                if (match) {
+                    const part1 = parseInt(match[1]); // יכול להיות יום או חודש
+                    const part2 = parseInt(match[2]); // יכול להיות חודש או יום
+                    const year = parseInt(match[3]);
+
+                    // בודק שמדובר בשנת 2026 או 26
+                    if (year === 2026 || year === 26) {
+                        let day = null;
+                        
+                        // מוודא שאחד מהחלקים הוא אפריל (4), וקובע שהשני הוא היום!
+                        if (part2 === 4) day = part1; 
+                        else if (part1 === 4) day = part2; 
+                        
+                        if (day !== null && day >= 1 && day <= 30) {
+                            const cell = document.getElementById(`day-${day}`);
+                            if (cell) {
+                                const div = document.createElement('div');
+                                div.className = 'yoga-class';
+                                
+                                const classTime = (idx.time > -1 && cols[idx.time]) ? cols[idx.time] : '';
+                                const classType = (idx.type > -1 && cols[idx.type]) ? cols[idx.type] : 'שיעור ללא שם';
+                                const teacherName = (idx.teacher > -1 && cols[idx.teacher]) ? cols[idx.teacher] : '';
+                                
+                                let innerHtml = `<strong>${classTime}</strong><br>${classType}`;
+                                if (teacherName) innerHtml += `<br><i class="text-gray-500">${teacherName}</i>`;
+                                
+                                div.innerHTML = innerHtml;
+                                cell.appendChild(div);
+                            }
+                        }
                     }
                 }
             });
